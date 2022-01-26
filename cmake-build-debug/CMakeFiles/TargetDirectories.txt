@@ -1,0 +1,3 @@
+/Users/rodionkargapolov/CLionProjects/Yandex-praktikum/cpp-search-server/cmake-build-debug/CMakeFiles/rebuild_cache.dir
+/Users/rodionkargapolov/CLionProjects/Yandex-praktikum/cpp-search-server/cmake-build-debug/CMakeFiles/edit_cache.dir
+/Users/rodionkargapolov/CLionProjects/Yandex-praktikum/cpp-search-server/cmake-build-debug/CMakeFiles/cpp_search_server.dir
