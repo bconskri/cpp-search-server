@@ -12,6 +12,7 @@ using namespace std;
 
 /* Подставьте вашу реализацию класса SearchServer сюда */
 const int MAX_RESULT_DOCUMENT_COUNT = 5;
+const double EPSILON = 1e-6;
 
 string ReadLine() {
     string s;
@@ -87,7 +88,7 @@ public:
 
         sort(matched_documents.begin(), matched_documents.end(),
              [](const Document& lhs, const Document& rhs) {
-                 if (abs(lhs.relevance - rhs.relevance) < 1e-6) {
+                 if (abs(lhs.relevance - rhs.relevance) < EPSILON) {
                      return lhs.rating > rhs.rating;
                  } else {
                      return lhs.relevance > rhs.relevance;
@@ -451,7 +452,7 @@ void TestSortByRelevance() {
         server.AddDocument(doc_id3, content3, DocumentStatus::ACTUAL, ratings);
         const auto found_docs = server.FindTopDocuments("cat city -dog"s);
         ASSERT_EQUAL(found_docs.size(), 2);
-        ASSERT_EQUAL_HINT(found_docs[0].id, 46, "Documents must be sort be relevance descending"s);
+        ASSERT_HINT(found_docs[0].relevance > found_docs[1].relevance, "Documents must be sort be relevance descending"s);
     }
 
 }
@@ -462,7 +463,7 @@ void TestRatingCalculation() {
      */
     const int doc_id = 47;
     const string content = "cat in the city"s;
-    const vector<int> ratings = {1, 2, 3};
+    vector<int> ratings = {1, 2, 3};
     {
         SearchServer server;
         server.AddDocument(doc_id, content, DocumentStatus::ACTUAL, ratings);
@@ -470,10 +471,25 @@ void TestRatingCalculation() {
         ASSERT_EQUAL(found_docs.size(), 1);
         ASSERT_EQUAL_HINT(found_docs[0].rating, 2, "Rating must be calculated as average"s);
     }
-
+    ratings = {-1, -2, -3};
+    {
+        SearchServer server;
+        server.AddDocument(doc_id, content, DocumentStatus::ACTUAL, ratings);
+        const auto found_docs = server.FindTopDocuments("city"s);
+        ASSERT_EQUAL(found_docs.size(), 1);
+        ASSERT_EQUAL_HINT(found_docs[0].rating, -2, "Rating must be calculated as average"s);
+    }
+    ratings = {1, -2, -3};
+    {
+        SearchServer server;
+        server.AddDocument(doc_id, content, DocumentStatus::ACTUAL, ratings);
+        const auto found_docs = server.FindTopDocuments("city"s);
+        ASSERT_EQUAL(found_docs.size(), 1);
+        ASSERT_EQUAL_HINT(found_docs[0].rating, -1, "Rating must be calculated as average"s);
+    }
 }
 
-void TestFilterByPredicat() {
+void TestFilterByPredicate() {
     /*
      * Фильтрация результатов поиска с использованием предиката, задаваемого пользователем.
      */
@@ -533,7 +549,18 @@ void TestFindByStatus() {
         const auto found_docs = server.FindTopDocuments("city"s, DocumentStatus::BANNED);
         ASSERT_EQUAL_HINT(found_docs.size(), 0, "Incorrect filtering by status of document"s);
     }
-
+    {
+        SearchServer server;
+        server.AddDocument(doc_id, content, DocumentStatus::ACTUAL, ratings);
+        const auto found_docs = server.FindTopDocuments("city"s, DocumentStatus::IRRELEVANT);
+        ASSERT_EQUAL_HINT(found_docs.size(), 0, "Incorrect filtering by status of document"s);
+    }
+    {
+        SearchServer server;
+        server.AddDocument(doc_id, content, DocumentStatus::ACTUAL, ratings);
+        const auto found_docs = server.FindTopDocuments("city"s, DocumentStatus::REMOVED);
+        ASSERT_EQUAL_HINT(found_docs.size(), 0, "Incorrect filtering by status of document"s);
+    }
 }
 
 void TestRelevanceCalc() {
@@ -552,10 +579,17 @@ void TestRelevanceCalc() {
         server.AddDocument(doc_id, content, DocumentStatus::ACTUAL, ratings);
         server.AddDocument(doc_id1, content1, DocumentStatus::ACTUAL, ratings);
         server.AddDocument(doc_id2, content2, DocumentStatus::ACTUAL, ratings);
-        const auto found_docs = server.FindTopDocuments("city"s, DocumentStatus::ACTUAL);
+        auto found_docs = server.FindTopDocuments("city"s, DocumentStatus::ACTUAL);
         ASSERT_EQUAL(found_docs.size(), 2);
-        ASSERT_EQUAL_HINT(found_docs[0].relevance, 0.1013662770270411, "Incorrect relevance calculating"s);
+        ASSERT_HINT(abs(found_docs[0].relevance - 0.1013662770270411) < EPSILON, "Incorrect relevance calculating"s);
+        found_docs = server.FindTopDocuments("house"s, DocumentStatus::ACTUAL);
+        ASSERT_EQUAL(found_docs.size(), 1);
+        ASSERT_HINT(abs(found_docs[0].relevance - 0.27465307216702745) < EPSILON, "Incorrect relevance calculating"s);
+        found_docs = server.FindTopDocuments("in"s, DocumentStatus::ACTUAL);
+        ASSERT_EQUAL(found_docs.size(), 3);
+        ASSERT_HINT(abs(found_docs[0].relevance - 0) < EPSILON, "Incorrect relevance calculating"s);
     }
+
 }
 
 template <typename T>
@@ -574,7 +608,7 @@ void TestSearchServer() {
     RUN_TEST(TestDocumentsMatching);
     RUN_TEST(TestSortByRelevance);
     RUN_TEST(TestRatingCalculation);
-    RUN_TEST(TestFilterByPredicat);
+    RUN_TEST(TestFilterByPredicate);
     RUN_TEST(TestFindByStatus);
     RUN_TEST(TestRelevanceCalc);
 }
