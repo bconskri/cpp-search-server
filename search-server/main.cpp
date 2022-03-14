@@ -71,44 +71,48 @@ enum class DocumentStatus {
 
 class SearchServer {
 public:
-    // Defines an invalid document id
-    // You can refer this constant as SearchServer::INVALID_DOCUMENT_ID
-    inline static constexpr int INVALID_DOCUMENT_ID = -1;
-
     SearchServer() = default;
 
     template <typename StringCollection>
     explicit SearchServer(const StringCollection& stop_words) {
+        /*Комментарии студента после ревью1:
+        не понял как в all_of или any_off засунуть второе условие
+        if (word != ""s)
+        Так как по нему происходит добавление элементов в вектор для каждого слова
+        его нужно перебирать в цикле
+         Прошу подсказать)
+         */
+        if (std::any_of(stop_words.cbegin(), stop_words.cend(), [](const string& word){return !IsValidWord(word);}))
+        {
+            throw invalid_argument("Недопустимые символы (с кодами от 0 до 31) в стоп словах"s);
+        }
         for (const string& word : stop_words) {
-            if (!IsValidWord(word)) {
-                throw invalid_argument("Недопустимые символы (с кодами от 0 до 31) в стоп словах"s); ;
-            }
             if (word != ""s) {
                 stop_words_.insert(word);
             }
         }
     }
 
-    explicit SearchServer(const string& stop_words) {
-        for (const string& word : SplitIntoWords(stop_words)) {
-            if (!IsValidWord(word)) {
-                throw invalid_argument("Недопустимые символы (с кодами от 0 до 31) в стоп словах"s); ;
-            }
-            if (word != ""s) {
-                stop_words_.insert(word);
-            }
-        }
-    }
+//    explicit SearchServer(const string& stop_words) {
+//        for (const string& word : SplitIntoWords(stop_words)) {
+//            if (!IsValidWord(word)) {
+//                throw invalid_argument("Недопустимые символы (с кодами от 0 до 31) в стоп словах"s); ;
+//            }
+//            if (word != ""s) {
+//                stop_words_.insert(word);
+//            }
+//        }
+//    }
+    /*Комментарии студаента после ревью1:
+    если я правильно понял это надо сделать так
+    */
+    explicit SearchServer(const string& stop_words) : SearchServer(SplitIntoWords(stop_words)) {}
 
     void AddDocument(int document_id, const string& document, DocumentStatus status, const vector<int>& ratings) {
         if ((document_id < 0) || (documents_.count(document_id) > 0)) {
             throw invalid_argument("Отрицательный id или id ранее добавленного документа"s);
         }
-        vector<string> words;
-        if (!SplitIntoWordsNoStop(document, words)) {
-            throw invalid_argument("Недопустимые символы (с кодами от 0 до 31) в тексте добавляемого документа"s);
-        }
-
+        const vector<string> words = SplitIntoWordsNoStop(document);
         const double inv_word_count = 1.0 / words.size();
         for (const string& word : words) {
             word_to_document_freqs_[word][document_id] += inv_word_count;
@@ -119,10 +123,7 @@ public:
 
     template <typename Filter>
     vector<Document> FindTopDocuments(const string& raw_query, Filter filter_function) const {
-        Query query;
-        if (!ParseQuery(raw_query, query)) {
-            throw invalid_argument("FindTopDocuments: Текст запроса некорректен"s);
-        }
+        const Query query = ParseQuery(raw_query);
         auto matched_documents = FindAllDocuments(query, filter_function);
 
         sort(matched_documents.begin(), matched_documents.end(),
@@ -162,10 +163,7 @@ public:
     }
 
     tuple<vector<string>, DocumentStatus> MatchDocument(const string& raw_query, int document_id) const {
-        Query query;
-        if (!ParseQuery(raw_query, query)) {
-            throw invalid_argument("MatchDocument: Текст запроса некорректен"s);
-        }
+        const Query query = ParseQuery(raw_query);
         vector<string> matched_words;
         for (const string& word : query.plus_words) {
             if (word_to_document_freqs_.count(word) == 0) {
@@ -209,19 +207,17 @@ private:
         });
     }
 
-    [[nodiscard]] bool SplitIntoWordsNoStop(const string& text, vector<string>& result) const {
-        result.clear();
+    const vector<string> SplitIntoWordsNoStop(const string& text) const {
         vector<string> words;
         for (const string& word : SplitIntoWords(text)) {
             if (!IsValidWord(word)) {
-                return false;
+                throw invalid_argument("Недопустимые символы (с кодами от 0 до 31) в тексте добавляемого документа"s);
             }
             if (!IsStopWord(word)) {
                 words.push_back(word);
             }
         }
-        result.swap(words);
-        return true;
+        return words;
     }
 
     static int ComputeAverageRating(const vector<int>& ratings) {
@@ -241,12 +237,10 @@ private:
         bool is_stop;
     };
 
-    [[nodiscard]] bool ParseQueryWord(string text, QueryWord& result) const {
+    QueryWord ParseQueryWord(string text) const {
         // Empty result by initializing it with default constructed QueryWord
-        result = {};
-
         if (text.empty()) {
-            return false;
+            throw invalid_argument("ParseQueryWord: Текст запроса некорректен"s);
         }
         bool is_minus = false;
         if (text[0] == '-') {
@@ -254,11 +248,10 @@ private:
             text = text.substr(1);
         }
         if (text.empty() || text[0] == '-' || !IsValidWord(text)) {
-            return false;
+            throw invalid_argument("ParseQueryWord: Текст запроса некорректен"s);
         }
 
-        result = QueryWord{text, is_minus, IsStopWord(text)};
-        return true;
+        return QueryWord{text, is_minus, IsStopWord(text)};
     }
 
     struct Query {
@@ -266,23 +259,20 @@ private:
         set<string> minus_words;
     };
 
-    [[nodiscard]] bool ParseQuery(const string& text, Query& result) const {
+     Query ParseQuery(const string& text) const {
         // Empty result by initializing it with default constructed Query
-        result = {};
+        Query query;
         for (const string& word : SplitIntoWords(text)) {
-            QueryWord query_word;
-            if (!ParseQueryWord(word, query_word)) {
-                return false;
-            }
+            const QueryWord query_word = ParseQueryWord(word);
             if (!query_word.is_stop) {
                 if (query_word.is_minus) {
-                    result.minus_words.insert(query_word.data);
+                    query.minus_words.insert(query_word.data);
                 } else {
-                    result.plus_words.insert(query_word.data);
+                    query.plus_words.insert(query_word.data);
                 }
             }
         }
-        return true;
+        return query;
     }
 
     // Existence required
