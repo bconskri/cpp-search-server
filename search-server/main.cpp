@@ -62,6 +62,17 @@ struct Document {
     int rating = 0;
 };
 
+template <typename StringContainer>
+set<string> MakeUniqueNonEmptyStrings(const StringContainer& strings) {
+    set<string> non_empty_strings;
+    for (const string& str : strings) {
+        if (!str.empty()) {
+            non_empty_strings.insert(str);
+        }
+    }
+    return non_empty_strings;
+}
+
 enum class DocumentStatus {
     ACTUAL,
     IRRELEVANT,
@@ -73,15 +84,8 @@ class SearchServer {
 public:
     SearchServer() = default;
 
-    template <typename StringCollection>
-    explicit SearchServer(const StringCollection& stop_words) {
-        /*Комментарии студента после ревью1:
-        не понял как в all_of или any_off засунуть второе условие
-        if (word != ""s)
-        Так как по нему происходит добавление элементов в вектор для каждого слова
-        его нужно перебирать в цикле
-         Прошу подсказать)
-         */
+    template <typename StringContainer>
+    explicit SearchServer(const StringContainer& stop_words) {
         if (std::any_of(stop_words.cbegin(), stop_words.cend(), [](const string& word){return !IsValidWord(word);}))
         {
             throw invalid_argument("Недопустимые символы (с кодами от 0 до 31) в стоп словах"s);
@@ -92,20 +96,7 @@ public:
             }
         }
     }
-
-//    explicit SearchServer(const string& stop_words) {
-//        for (const string& word : SplitIntoWords(stop_words)) {
-//            if (!IsValidWord(word)) {
-//                throw invalid_argument("Недопустимые символы (с кодами от 0 до 31) в стоп словах"s); ;
-//            }
-//            if (word != ""s) {
-//                stop_words_.insert(word);
-//            }
-//        }
-//    }
-    /*Комментарии студаента после ревью1:
-    если я правильно понял это надо сделать так
-    */
+    
     explicit SearchServer(const string& stop_words) : SearchServer(SplitIntoWords(stop_words)) {}
 
     void AddDocument(int document_id, const string& document, DocumentStatus status, const vector<int>& ratings) {
@@ -280,9 +271,8 @@ private:
         return log(GetDocumentCount() * 1.0 / word_to_document_freqs_.at(word).size());
     }
 
-    template <typename Filter
-    >
-    vector<Document> FindAllDocuments(const Query& query, Filter filter_function) const {
+    template <typename DocumentPredicate>
+    vector<Document> FindAllDocuments(const Query& query, DocumentPredicate filter_function) const {
         map<int, double> document_to_relevance;
         for (const string& word : query.plus_words) {
             if (word_to_document_freqs_.count(word) == 0) {
@@ -319,7 +309,52 @@ private:
 
 };
 
-// -------- Начало модульных тестов поисковой системы ----------
+template <typename Iterator>
+class Paginator {
+    // тело класса
+public:
+    Paginator(Iterator It_begin, Iterator It_end, int PageSize) {
+        _it_begin = It_begin;
+        _it_end = It_end;
+        _size = PageSize;
+
+        //devide contaner into pages
+        int pages_count = distance(It_begin, It_end) / PageSize;
+        //add full pages except last page
+        for (int page = 0; page != pages_count; ++page) {
+            auto const _it = _it_begin;
+            advance(_it_begin, _size);
+            _pages.push_back(pair{_it, _it_begin});
+        }
+        //add last page
+        if (_it_begin != _it_end) {
+            _pages.push_back(pair{_it_begin, _it_end});
+        }
+    }
+
+    auto begin() const {
+        return _pages.begin();
+    }
+
+    auto end() const {
+        return _pages.end();
+    }
+
+    int size() const {
+        return _pages.size();
+    }
+private:
+    Iterator _it_begin;
+    Iterator _it_end;
+    int _size = 0;
+    vector<pair<Iterator, Iterator>> _pages;
+};
+
+template <typename Container>
+auto Paginate(const Container& c, size_t page_size) {
+    return Paginator(begin(c), end(c), page_size);
+}
+
 template <typename Element>
 ostream& operator<<(ostream& out, const vector<Element>& container) {
     bool is_first = true;
@@ -368,6 +403,24 @@ ostream& operator<<(ostream& out, const set<Element>& container) {
     return out;
 }
 
+ostream& operator<<(ostream& out, const Document& document)  {
+    out << "{ "s
+        << "document_id = "s << document.id << ", "s
+        << "relevance = "s << document.relevance << ", "s
+        << "rating = "s << document.rating
+        << " }"s;
+    return out;
+}
+
+template <typename Iterator>
+ostream& operator<<(ostream& out, const pair<Iterator, Iterator>& container) {
+    for (auto document = container.first; document != container.second; ++document) {
+        out << *document;
+    }
+    return out;
+}
+
+// -------- Начало модульных тестов поисковой системы ----------
 #define ASSERT_EQUAL(a, b) AssertEqualImpl((a), (b), #a, #b, __FILE__, __FUNCTION__, __LINE__, ""s)
 
 #define ASSERT_EQUAL_HINT(a, b, hint) AssertEqualImpl((a), (b), #a, #b, __FILE__, __FUNCTION__, __LINE__, (hint))
@@ -678,8 +731,6 @@ void TestSearchServer() {
 // --------- Окончание модульных тестов поисковой системы -----------
 
 // ==================== для примера =========================
-
-
 void PrintDocument(const Document& document) {
     cout << "{ "s
          << "document_id = "s << document.id << ", "s
@@ -738,22 +789,41 @@ int main() {
     // Если вы видите эту строку, значит все тесты прошли успешно
     cout << "Search server testing finished"s << endl;
 
-    SearchServer search_server("и в на"s);
+//    SearchServer search_server("и в на"s);
+//
+//    AddDocument(search_server, 1, "пушистый кот пушистый хвост"s, DocumentStatus::ACTUAL, {7, 2, 7});
+//    AddDocument(search_server, 1, "пушистый пёс и модный ошейник"s, DocumentStatus::ACTUAL, {1, 2});
+//    AddDocument(search_server, -1, "пушистый пёс и модный ошейник"s, DocumentStatus::ACTUAL, {1, 2});
+//    AddDocument(search_server, 3, "большой пёс скво\x12рец евгений"s, DocumentStatus::ACTUAL, {1, 3, 2});
+//    AddDocument(search_server, 4, "большой пёс скворец евгений"s, DocumentStatus::ACTUAL, {1, 1, 1});
+//
+//    FindTopDocuments(search_server, "пушистый -пёс"s);
+//    FindTopDocuments(search_server, "пушистый --кот"s);
+//    FindTopDocuments(search_server, "пушистый -"s);
+//
+//    MatchDocuments(search_server, "пушистый пёс"s);
+//    MatchDocuments(search_server, "модный -кот"s);
+//    MatchDocuments(search_server, "модный --пёс"s);
+//    MatchDocuments(search_server, "пушистый - хвост"s);
 
-    AddDocument(search_server, 1, "пушистый кот пушистый хвост"s, DocumentStatus::ACTUAL, {7, 2, 7});
-    AddDocument(search_server, 1, "пушистый пёс и модный ошейник"s, DocumentStatus::ACTUAL, {1, 2});
-    AddDocument(search_server, -1, "пушистый пёс и модный ошейник"s, DocumentStatus::ACTUAL, {1, 2});
-    AddDocument(search_server, 3, "большой пёс скво\x12рец евгений"s, DocumentStatus::ACTUAL, {1, 3, 2});
-    AddDocument(search_server, 4, "большой пёс скворец евгений"s, DocumentStatus::ACTUAL, {1, 1, 1});
+    SearchServer search_server("and with"s);
 
-    FindTopDocuments(search_server, "пушистый -пёс"s);
-    FindTopDocuments(search_server, "пушистый --кот"s);
-    FindTopDocuments(search_server, "пушистый -"s);
+    search_server.AddDocument(1, "funny pet and nasty rat"s, DocumentStatus::ACTUAL, {7, 2, 7});
+    search_server.AddDocument(2, "funny pet with curly hair"s, DocumentStatus::ACTUAL, {1, 2, 3});
+    search_server.AddDocument(3, "big cat nasty hair"s, DocumentStatus::ACTUAL, {1, 2, 8});
+    search_server.AddDocument(4, "big dog cat Vladislav"s, DocumentStatus::ACTUAL, {1, 3, 2});
+    search_server.AddDocument(5, "big dog hamster Borya"s, DocumentStatus::ACTUAL, {1, 1, 1});
 
-    MatchDocuments(search_server, "пушистый пёс"s);
-    MatchDocuments(search_server, "модный -кот"s);
-    MatchDocuments(search_server, "модный --пёс"s);
-    MatchDocuments(search_server, "пушистый - хвост"s);
+    //const auto search_results = search_server.FindTopDocuments("curly dog"s);
+    const auto search_results = search_server.FindTopDocuments("naughty"s);
+    int page_size = 2;
+    const auto pages = Paginate(search_results, page_size);
+
+    // Выводим найденные документы по страницам
+    for (auto page = pages.begin(); page != pages.end(); ++page) {
+        cout << *page << endl;
+        cout << "Page break"s << endl;
+    }
 
     return 0;
 }
