@@ -2,6 +2,7 @@
 #include "search_server.h"
 #include "request_queue.h"
 #include "document.h"
+#include "test_example_functions.h"
 
 #include <iostream>
 

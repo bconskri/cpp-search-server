@@ -91,10 +91,13 @@ int SearchServer::ComputeAverageRating(const std::vector<int>& ratings) {
     if (ratings.empty()) {
         return 0;
     }
-    int rating_sum = 0;
-    for (const int rating : ratings) {
-        rating_sum += rating;
-    }
+    //edited - review recommendation
+//    int rating_sum = 0;
+//    for (const int rating : ratings) {
+//        rating_sum += rating;
+//    }
+    int rating_sum = std::accumulate(ratings.begin(), ratings.end(), 0);
+
     return rating_sum / static_cast<int>(ratings.size());
 }
 
@@ -133,44 +136,4 @@ SearchServer::Query SearchServer::ParseQuery(const std::string& text) const {
 
 double SearchServer::ComputeWordInverseDocumentFreq(const std::string& word) const {
     return std::log(SearchServer::GetDocumentCount() * 1.0 / word_to_document_freqs_.at(word).size());
-}
-
-// ==================== для отладки и примеров =========================
-void PrintDocument(const Document& document) {
-    std::cout << "{ "s
-              << "document_id = "s << document.id << ", "s
-              << "relevance = "s << document.relevance << ", "s
-              << "rating = "s << document.rating
-              << " }"s << std::endl;
-}
-
-void PrintMatchDocumentResult(int document_id, const std::vector<std::string>& words, DocumentStatus status) {
-    std::cout << "{ "s
-              << "document_id = "s << document_id << ", "s
-              << "status = "s << static_cast<int>(status) << ", "s
-              << "words ="s;
-    for (const std::string& word : words) {
-        std::cout << ' ' << word;
-    }
-    std::cout << "}"s << std::endl;
-}
-
-void AddDocument(SearchServer& search_server, int document_id, const std::string& document, DocumentStatus status,
-                 const std::vector<int>& ratings) {
-    try {
-        search_server.AddDocument(document_id, document, status, ratings);
-    } catch (const std::exception& e) {
-        std::cout << "Ошибка добавления документа "s << document_id << ": "s << e.what() << std::endl;
-    }
-}
-
-void FindTopDocuments(const SearchServer& search_server, const std::string& raw_query) {
-    std::cout << "Результаты поиска по запросу: "s << raw_query << std::endl;
-    try {
-        for (const Document& document : search_server.FindTopDocuments(raw_query)) {
-            PrintDocument(document);
-        }
-    } catch (const std::exception& e) {
-        std::cout << "Ошибка поиска: "s << e.what() << std::endl;
-    }
 }
