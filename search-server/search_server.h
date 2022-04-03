@@ -11,6 +11,7 @@
 #include <cmath>
 #include "document.h"
 #include "string_processing.h"
+#include "log_duration.h"
 
 using namespace std::string_literals;
 
@@ -92,6 +93,9 @@ template <typename StringContainer>
 
 template <typename DocumentPredicate>
 std::vector<Document> SearchServer::FindTopDocuments(const std::string& raw_query, DocumentPredicate document_predicate) const {
+    //
+    LOG_DURATION_STREAM("Operation time", std::cout);
+    //
     const SearchServer::Query query = SearchServer::ParseQuery(raw_query);
     auto matched_documents = SearchServer::FindAllDocuments(query, document_predicate);
 
