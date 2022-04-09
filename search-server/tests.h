@@ -6,7 +6,7 @@
 #include <iostream>
 #include <string>
 #include <stdlib.h>
-#include "io_functions.h"
+#include "read_input_functions.h"
 
 using namespace std::string_literals;
 

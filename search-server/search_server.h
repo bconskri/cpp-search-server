@@ -38,6 +38,26 @@ public:
 
     std::tuple<std::vector<std::string>, DocumentStatus> MatchDocument(const std::string& raw_query, int document_id) const;
 
+    /* Спринт 5
+     * Откажитесь от метода GetDocumentId(int index) и вместо него определите методы begin и end. Они вернут итераторы.
+     * Итератор даст доступ к id всех документов, хранящихся в поисковом сервере. Вы можете не разрабатывать собственный
+     * итератор, а применить готовый константный итератор удобного контейнера.
+     * Если begin и end определены корректно, появится возможность использовать упрощённую форму for с поисковым сервером
+     */
+    std::vector<int>::iterator begin();
+    std::vector<int>::iterator end();
+    std::vector<int>::const_iterator cbegin() const;
+    std::vector<int>::const_iterator cend() const;
+    /* Спринт 5
+     * Разработайте метод получения частот слов по id документа:
+     * Если документа не существует, возвратите ссылку на пустой map.
+     */
+    const std::map<std::string, double>& GetWordFrequencies(int document_id) const;
+    /* Спринт 5
+     * Разработайте метод удаления документов из поискового сервера
+     */
+    void RemoveDocument(int document_id);
+
 private:
     struct DocumentData {
         int rating;
@@ -45,6 +65,11 @@ private:
     };
     std::set<std::string> stop_words_;
     std::map<std::string, std::map<int, double>> word_to_document_freqs_;
+    /*
+     * Спринт 5. Рефакторинг
+     * Добавлено для хранения частоты слов по документам
+     */
+    std::map<int, std::map<std::string, double>> document_to_word_freqs_;
     std::map<int, DocumentData> documents_;
     std::vector<int> document_ids_;
 

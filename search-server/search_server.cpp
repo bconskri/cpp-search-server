@@ -11,6 +11,10 @@ void SearchServer::AddDocument(int document_id, const std::string& document, Doc
     const double inv_word_count = 1.0 / words.size();
     for (const std::string& word : words) {
         word_to_document_freqs_[word][document_id] += inv_word_count;
+        /*
+         * Спринт 5. Добавлено хранение частоты слов по документам
+         */
+        document_to_word_freqs_[document_id][word] += inv_word_count;
     }
     documents_.emplace(document_id, DocumentData{SearchServer::ComputeAverageRating(ratings), status});
     document_ids_.push_back(document_id);
@@ -62,6 +66,44 @@ std::tuple<std::vector<std::string>, DocumentStatus> SearchServer::MatchDocument
         }
     }
     return {matched_words, documents_.at(document_id).status};
+}
+
+std::vector<int>::iterator SearchServer::begin() {
+    return document_ids_.begin();
+}
+
+std::vector<int>::const_iterator SearchServer::cbegin() const {
+    return document_ids_.cbegin();
+}
+
+std::vector<int>::iterator SearchServer::end() {
+    return document_ids_.end();
+}
+
+std::vector<int>::const_iterator SearchServer::cend() const {
+    return document_ids_.cend();
+}
+
+const std::map<std::string, double> &SearchServer::GetWordFrequencies(int document_id) const {
+    static const std::map<std::string, double> result;
+    auto it = document_to_word_freqs_.find(document_id); //Complexity: Log in the size of the container.
+    if (it != document_to_word_freqs_.end()) {
+        return it -> second;
+    }
+    return result;
+}
+
+void SearchServer::RemoveDocument(int document_id) {
+    if (!documents_.count(document_id)) {return;}
+
+    documents_.erase(document_id); //Complexity: log(c.size()) + c.count(key)
+    remove(document_ids_.begin(), document_ids_.end(), document_id); //Complexity: Liner
+
+    for (auto [word, freq] : document_to_word_freqs_.at(document_id)) { //W
+        word_to_document_freqs_.at(word).erase(document_id); //Complexity: Log in the size of the container.
+    }
+
+    document_to_word_freqs_.erase(document_id); //Complexity: log(c.size()) + c.count(key)
 }
 
 //private:
