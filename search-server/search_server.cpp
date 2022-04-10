@@ -17,7 +17,7 @@ void SearchServer::AddDocument(int document_id, const std::string& document, Doc
         document_to_word_freqs_[document_id][word] += inv_word_count;
     }
     documents_.emplace(document_id, DocumentData{SearchServer::ComputeAverageRating(ratings), status});
-    document_ids_.push_back(document_id);
+    document_ids_.insert(document_id);
 }
 
 std::vector<Document> SearchServer::FindTopDocuments(const std::string& raw_query, DocumentStatus status) const {
@@ -35,16 +35,9 @@ int SearchServer::GetDocumentCount() const {
     return documents_.size();
 }
 
-int SearchServer::GetDocumentId(int index) const {
-    if (index >= 0 && index < SearchServer::GetDocumentCount()) {
-        return document_ids_[index];
-    }
-    throw std::out_of_range("Индекс документа за пределами допустимого диапазона (0; количество документов)"s);
-}
-
 std::tuple<std::vector<std::string>, DocumentStatus> SearchServer::MatchDocument(const std::string& raw_query, int document_id) const {
     //
-    LOG_DURATION_STREAM("Operation time", std::cout);
+    //LOG_DURATION_STREAM("Operation time", std::cout);
     //
     const Query query = SearchServer::ParseQuery(raw_query);
     std::vector<std::string> matched_words;
@@ -68,19 +61,19 @@ std::tuple<std::vector<std::string>, DocumentStatus> SearchServer::MatchDocument
     return {matched_words, documents_.at(document_id).status};
 }
 
-std::vector<int>::iterator SearchServer::begin() {
+std::set<int>::iterator SearchServer::begin() {
     return document_ids_.begin();
 }
 
-std::vector<int>::const_iterator SearchServer::cbegin() const {
+std::set<int>::const_iterator SearchServer::cbegin() const {
     return document_ids_.cbegin();
 }
 
-std::vector<int>::iterator SearchServer::end() {
+std::set<int>::iterator SearchServer::end() {
     return document_ids_.end();
 }
 
-std::vector<int>::const_iterator SearchServer::cend() const {
+std::set<int>::const_iterator SearchServer::cend() const {
     return document_ids_.cend();
 }
 
@@ -97,7 +90,7 @@ void SearchServer::RemoveDocument(int document_id) {
     if (!documents_.count(document_id)) {return;}
 
     documents_.erase(document_id); //Complexity: log(c.size()) + c.count(key)
-    remove(document_ids_.begin(), document_ids_.end(), document_id); //Complexity: Liner
+    document_ids_.erase(document_id); //Complexity: log(c.size()) + c.count(key)
 
     for (auto [word, freq] : document_to_word_freqs_.at(document_id)) { //W
         word_to_document_freqs_.at(word).erase(document_id); //Complexity: Log in the size of the container.

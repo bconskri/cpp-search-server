@@ -34,7 +34,6 @@ public:
     std::vector<Document> FindTopDocuments(const std::string& raw_query) const;
 
     int GetDocumentCount() const;
-    int GetDocumentId(int index) const;
 
     std::tuple<std::vector<std::string>, DocumentStatus> MatchDocument(const std::string& raw_query, int document_id) const;
 
@@ -44,10 +43,10 @@ public:
      * итератор, а применить готовый константный итератор удобного контейнера.
      * Если begin и end определены корректно, появится возможность использовать упрощённую форму for с поисковым сервером
      */
-    std::vector<int>::iterator begin();
-    std::vector<int>::iterator end();
-    std::vector<int>::const_iterator cbegin() const;
-    std::vector<int>::const_iterator cend() const;
+    std::set<int>::iterator begin();
+    std::set<int>::iterator end();
+    std::set<int>::const_iterator cbegin() const;
+    std::set<int>::const_iterator cend() const;
     /* Спринт 5
      * Разработайте метод получения частот слов по id документа:
      * Если документа не существует, возвратите ссылку на пустой map.
@@ -65,13 +64,16 @@ private:
     };
     std::set<std::string> stop_words_;
     std::map<std::string, std::map<int, double>> word_to_document_freqs_;
-    /*
-     * Спринт 5. Рефакторинг
+    /* Спринт 5.
      * Добавлено для хранения частоты слов по документам
      */
     std::map<int, std::map<std::string, double>> document_to_word_freqs_;
+
     std::map<int, DocumentData> documents_;
-    std::vector<int> document_ids_;
+    /* Спринт 5.
+     * Vector refactor to set for ease erase
+     */
+    std::set<int> document_ids_;
 
     bool IsStopWord(const std::string& word) const;
 
