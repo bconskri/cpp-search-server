@@ -21,9 +21,8 @@ void SearchServer::AddDocument(int document_id, const std::string& document, Doc
 }
 
 std::vector<Document> SearchServer::FindTopDocuments(const std::string& raw_query, DocumentStatus status) const {
-    return SearchServer::FindTopDocuments(raw_query, [status](int document_id, DocumentStatus lstatus, int rating){
-        (void)(document_id);
-        (void)(rating);
+    return SearchServer::FindTopDocuments(raw_query, [status]([[maybe_unused]] int document_id,
+            DocumentStatus lstatus, [[maybe_unused]] int rating){
         return lstatus == status;});
 }
 
@@ -78,12 +77,12 @@ std::set<int>::const_iterator SearchServer::cend() const {
 }
 
 const std::map<std::string, double> &SearchServer::GetWordFrequencies(int document_id) const {
-    static const std::map<std::string, double> result;
+    static const std::map<std::string, double> empty_map;
     auto it = document_to_word_freqs_.find(document_id); //Complexity: Log in the size of the container.
     if (it != document_to_word_freqs_.end()) {
         return it -> second;
     }
-    return result;
+    return empty_map;
 }
 
 void SearchServer::RemoveDocument(int document_id) {

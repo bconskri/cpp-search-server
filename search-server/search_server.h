@@ -13,8 +13,6 @@
 #include "string_processing.h"
 #include "log_duration.h"
 
-using namespace std::string_literals;
-
 const int MAX_RESULT_DOCUMENT_COUNT = 5;
 const double EPSILON = 1e-6;
 
@@ -107,6 +105,7 @@ private:
 //template function realization
 template <typename StringContainer>
  SearchServer::SearchServer(const StringContainer& stop_words) {
+    using namespace std::string_literals;
     if (std::any_of(stop_words.cbegin(), stop_words.cend(), [](const std::string& word){return !SearchServer::IsValidWord(word);}))
     {
         throw std::invalid_argument("Недопустимые символы (с кодами от 0 до 31) в стоп словах"s);
