@@ -6,6 +6,8 @@
 #include "paginator.h"
 #include "remove_duplicates.h"
 #include <iostream>
+#include "process_queries.h"
+#include "../Google_tests/TestProcessQueries.cpp"
 
 int main() {
     TestSearchServer();
