@@ -9,6 +9,7 @@
 #include <numeric>
 #include <algorithm>
 #include <cmath>
+#include <execution>
 #include "document.h"
 #include "string_processing.h"
 #include "log_duration.h"
@@ -54,6 +55,13 @@ public:
      * Разработайте метод удаления документов из поискового сервера
      */
     void RemoveDocument(int document_id);
+
+    /* Параллельные алгоритмы. Урок 9: Параллелим методы поисковой системы
+     * Реализуйте многопоточную версию метода RemoveDocument в дополнение к однопоточной.
+     * Как и прежде, в метод RemoveDocument может быть передан любой document_id
+     */
+    template <typename ExecutionPolicy>
+    void RemoveDocument(ExecutionPolicy policy, int document_id);
 
 private:
     struct DocumentData {
@@ -173,4 +181,27 @@ std::vector<Document> SearchServer::FindAllDocuments(const SearchServer::Query& 
                                     });
     }
     return matched_documents;
+}
+
+/* Параллельные алгоритмы. Урок 9: Параллелим методы поисковой системы
+* Реализуйте многопоточную версию метода RemoveDocument в дополнение к однопоточной.
+* Как и прежде, в метод RemoveDocument может быть передан любой document_id
+*/
+template <typename ExecutionPolicy>
+void SearchServer::RemoveDocument(ExecutionPolicy policy, int document_id) {
+    if (!documents_.count(document_id)) {return;}
+
+    documents_.erase(document_id); //Complexity: log(c.size()) + c.count(key)
+    document_ids_.erase(document_id); //Complexity: log(c.size()) + c.count(key)
+
+    const auto& words_of_doc = document_to_word_freqs_.at(document_id);
+    std::vector<const std::string*> words_to_erase(words_of_doc.size());
+    std::transform(policy, words_of_doc.begin(), words_of_doc.end(),
+                   words_to_erase.begin(),
+                   [](const auto& words_freq){ return &words_freq.first;});
+
+    std::for_each(policy, words_to_erase.begin(), words_to_erase.end(),
+                  [this, document_id](const auto& word){word_to_document_freqs_.at(*word).erase(document_id);});
+
+    document_to_word_freqs_.erase(document_id); //Complexity: log(c.size()) + c.count(key)
 }
