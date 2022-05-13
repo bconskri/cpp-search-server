@@ -34,12 +34,18 @@ int SearchServer::GetDocumentCount() const {
     return documents_.size();
 }
 
+/* Реализуйте метод MatchDocument:
+ * В первом элементе кортежа верните все плюс-слова запроса, содержащиеся в документе.
+ * Слова не должны дублироваться. Пусть они будут отсортированы по возрастанию.
+ * Если документ не соответствует запросу (нет пересечений по плюс-словам или есть минус-слово),
+ * вектор слов нужно вернуть пустым
+ */
 std::tuple<std::vector<std::string>, DocumentStatus> SearchServer::MatchDocument(const std::string& raw_query, int document_id) const {
-    //
-    //LOG_DURATION_STREAM("Operation time", std::cout);
-    //
+    //разберем запрос на структуру плюс и минус слов
     const Query query = SearchServer::ParseQuery(raw_query);
     std::vector<std::string> matched_words;
+    //для каждого плюс слова найдем документ, который его содержит
+    //и запомним плюс слово в таком случае
     for (const std::string& word : query.plus_words) {
         if (word_to_document_freqs_.count(word) == 0) {
             continue;
@@ -48,6 +54,7 @@ std::tuple<std::vector<std::string>, DocumentStatus> SearchServer::MatchDocument
             matched_words.push_back(word);
         }
     }
+    //если документ содержит минус слово, то документ нам не подходит
     for (const std::string& word : query.minus_words) {
         if (word_to_document_freqs_.count(word) == 0) {
             continue;
@@ -155,19 +162,30 @@ SearchServer::QueryWord SearchServer::ParseQueryWord(std::string text) const {
     return SearchServer::QueryWord{text, is_minus, IsStopWord(text)};
 }
 
+/*
+ * Разберем запрос на структуру пллюс слова и минус слова
+ */
 SearchServer::Query SearchServer::ParseQuery(const std::string& text) const {
-    // Empty result by initializing it with default constructed Query
     SearchServer::Query query;
     for (const std::string& word : SplitIntoWords(text)) {
         const SearchServer::QueryWord query_word = SearchServer::ParseQueryWord(word);
         if (!query_word.is_stop) {
             if (query_word.is_minus) {
-                query.minus_words.insert(query_word.data);
+                query.minus_words.push_back(query_word.data);
             } else {
-                query.plus_words.insert(query_word.data);
+                query.plus_words.push_back(query_word.data);
             }
         }
     }
+    //так как контейнер вектор - нужно следить за уникальностью значений
+    std::sort(query.minus_words.begin(), query.minus_words.end());
+    auto itm = std::unique(query.minus_words.begin(), query.minus_words.end());
+    query.minus_words.resize(std::distance(query.minus_words.begin(), itm));
+    //так как контейнер вектор - нужно следить за уникальностью значений
+    std::sort(query.plus_words.begin(), query.plus_words.end());
+    auto itp = std::unique(query.plus_words.begin(), query.plus_words.end());
+    query.plus_words.resize(std::distance(query.plus_words.begin(), itp));
+    //
     return query;
 }
 

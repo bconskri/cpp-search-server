@@ -8,6 +8,8 @@
 #include <iostream>
 #include "process_queries.h"
 #include "../Google_tests/TestProcessQueries.cpp"
+#include "log_duration.h"
+#include "../Google_tests/test_par_2_3.h"
 
 int main() {
     TestSearchServer();
@@ -109,6 +111,11 @@ int main() {
     RemoveDuplicates(search_server3);
     std::cout << "After duplicates removed: "s << search_server3.GetDocumentCount() << std::endl;
 
+    //урок 9 параллелим методы
+    std::cout << std::endl << "---Sprint 8. Урок 9---"s << std::endl << std::endl;
+    TestPar2_3_1();
+    TestPar2_3();
+    Test2_3MatchDocument();
 
     return 0;
 }

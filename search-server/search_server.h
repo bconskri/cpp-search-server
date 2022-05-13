@@ -34,7 +34,20 @@ public:
 
     int GetDocumentCount() const;
 
+    /* Реализуйте метод MatchDocument:
+     * В первом элементе кортежа верните все плюс-слова запроса, содержащиеся в документе.
+     * Слова не должны дублироваться. Пусть они будут отсортированы по возрастанию.
+     * Если документ не соответствует запросу (нет пересечений по плюс-словам или есть минус-слово),
+     * вектор слов нужно вернуть пустым
+     */
     std::tuple<std::vector<std::string>, DocumentStatus> MatchDocument(const std::string& raw_query, int document_id) const;
+    /* Параллельные алгоритмы. Урок 9: Параллелим методы поисковой системы 2/3
+     * Реализуйте многопоточную версию метода MatchDocument в дополнение к однопоточной.
+     */
+    template <typename ExecutionPolicy>
+    std::tuple<std::vector<std::string>, DocumentStatus> MatchDocument(ExecutionPolicy policy,
+                                                                       const std::string& raw_query,
+                                                                       int document_id) const;
 
     /* Спринт 5
      * Откажитесь от метода GetDocumentId(int index) и вместо него определите методы begin и end. Они вернут итераторы.
@@ -56,7 +69,7 @@ public:
      */
     void RemoveDocument(int document_id);
 
-    /* Параллельные алгоритмы. Урок 9: Параллелим методы поисковой системы
+    /* Параллельные алгоритмы. Урок 9: Параллелим методы поисковой системы 1/3
      * Реализуйте многопоточную версию метода RemoveDocument в дополнение к однопоточной.
      * Как и прежде, в метод RemoveDocument может быть передан любой document_id
      */
@@ -98,11 +111,18 @@ private:
     QueryWord ParseQueryWord(std::string text) const;
 
     struct Query {
-        std::set<std::string> plus_words;
-        std::set<std::string> minus_words;
+        std::vector<std::string> plus_words;
+        std::vector<std::string> minus_words;
     };
-
+    /*
+     * Разберем запрос на структуру пллюс слова и минус слова
+     */
     Query ParseQuery(const std::string& text) const;
+    /* Версия для распараллеливания
+     * Разберем запрос на структуру пллюс слова и минус слова
+     */
+    template <typename ExecutionPolicy>
+    Query ParseQuery(ExecutionPolicy policy, const std::string& text) const;
 
     double ComputeWordInverseDocumentFreq(const std::string& word) const;
 
@@ -150,7 +170,12 @@ std::vector<Document> SearchServer::FindTopDocuments(const std::string& raw_quer
 template <typename DocumentPredicate>
 std::vector<Document> SearchServer::FindAllDocuments(const SearchServer::Query& query, DocumentPredicate filter_function) const {
     std::map<int, double> document_to_relevance;
-    for (const std::string& word : query.plus_words) {
+    //сделаем заглушку до распарралеливания
+    //так как в параллельной версии тут дубли
+    std::set<std::string> plus_words_(query.plus_words.begin(), query.plus_words.end());
+    std::set<std::string> minus_words_(query.minus_words.begin(), query.minus_words.end());
+    //
+    for (const std::string& word : plus_words_) {
         if (word_to_document_freqs_.count(word) == 0) {
             continue;
         }
@@ -163,7 +188,7 @@ std::vector<Document> SearchServer::FindAllDocuments(const SearchServer::Query& 
         }
     }
 
-    for (const std::string& word : query.minus_words) {
+    for (const std::string& word : minus_words_) {
         if (word_to_document_freqs_.count(word) == 0) {
             continue;
         }
@@ -204,4 +229,71 @@ void SearchServer::RemoveDocument(ExecutionPolicy policy, int document_id) {
                   [this, document_id](const auto& word){word_to_document_freqs_.at(*word).erase(document_id);});
 
     document_to_word_freqs_.erase(document_id); //Complexity: log(c.size()) + c.count(key)
+}
+
+/* Версия для распараллеливания
+ * Перешли на вектора но в данной версии не работаем с уникальностью
+ * Разберем запрос на структуру плюс слова и минус слова
+ */
+template <typename ExecutionPolicy>
+SearchServer::Query SearchServer::ParseQuery([[maybe_unused]]ExecutionPolicy policy, const std::string& text) const {
+    // Empty result by initializing it with default constructed Query
+    SearchServer::Query result;
+    for (const std::string& word : SplitIntoWords(text)) {
+        const SearchServer::QueryWord query_word = SearchServer::ParseQueryWord(word);
+        if (!query_word.is_stop) {
+            if (query_word.is_minus) {
+                //контейнер вектор - но в данной версии не работаем с уникальностью
+                result.minus_words.push_back(query_word.data);
+            } else {
+                //контейнер вектор - но в данной версии не работаем с уникальностью
+                result.plus_words.push_back(query_word.data);
+            }
+        }
+    }
+    return result;
+}
+
+/* Параллельные алгоритмы. Урок 9: Параллелим методы поисковой системы 2/3
+* Реализуйте многопоточную версию метода MatchDocument в дополнение к однопоточной.
+*/
+template <typename ExecutionPolicy>
+std::tuple<std::vector<std::string>, DocumentStatus> SearchServer::MatchDocument([[maybe_unused]] ExecutionPolicy policy,
+                                                                   const std::string& raw_query,
+                                                                   int document_id) const {
+    if (std::is_same<std::execution::sequenced_policy, ExecutionPolicy>::value) {
+        //в таком случае вызываем однопотоковую версию без изменений
+        return SearchServer::MatchDocument(raw_query, document_id);
+
+    } else if (std::is_same<std::execution::parallel_policy, ExecutionPolicy>::value) {
+        //разберем запрос на структуру плюс и минус слов
+        const Query query = SearchServer::ParseQuery(std::execution::par, raw_query);
+        std::vector<std::string> matched_words;
+        //если хоть одно минус слово встречается в документе - возвращаем пустой матчинг
+        if (any_of(std::execution::par, query.minus_words.begin(), query.minus_words.end(),
+                    [this, document_id](const std::string& word) {
+                        return (word_to_document_freqs_.count(word) > 0 &&
+                                word_to_document_freqs_.at(word).count(document_id) > 0);
+                    })) {
+            return {matched_words, documents_.at(document_id).status};
+        }
+        //для каждого плюс слова если найдем документ, который его содержит
+        //то запомним плюс слово в таком случае
+        matched_words.resize(query.plus_words.size());
+        const auto& it = std::copy_if(std::execution::par,
+                     query.plus_words.begin(),query.plus_words.end(),
+                     matched_words.begin(),
+                     [this, document_id](const std::string& word) {
+                         return (word_to_document_freqs_.count(word) > 0 &&
+                                 word_to_document_freqs_.at(word).count(document_id) > 0);
+                     }
+        );
+        matched_words.erase(it, matched_words.end());
+        //
+        std::sort(std::execution::seq, matched_words.begin(), matched_words.end());
+        const auto& itr = std::unique(std::execution::seq, matched_words.begin(), matched_words.end());
+        matched_words.erase(itr, matched_words.end());
+        //
+        return {matched_words, documents_.at(document_id).status};
+    }
 }
