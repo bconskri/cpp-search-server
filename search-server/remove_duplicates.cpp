@@ -5,13 +5,13 @@
 
 //out of class procedure
 void RemoveDuplicates(SearchServer& search_server) {
-    std::set<std::set<std::string>> words_of_docs_processed;
+    std::set<std::set<std::string_view>> words_of_docs_processed;
     std::set<int> doc_duplicated_ids;
 
     for (auto doc_found : search_server) {
         const auto& doc_words_freq = search_server.GetWordFrequencies(doc_found);
 
-        std::set<std::string> doc_words_vector;
+        std::set<std::string_view> doc_words_vector;
         for (const auto& [word, _] : doc_words_freq) {
             doc_words_vector.insert(word); // Complexity: Amortized constant.
         } //w*N

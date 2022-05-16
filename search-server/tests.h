@@ -16,8 +16,8 @@ using namespace std::string_literals;
 
 // -------- Начало модульных тестов поисковой системы ----------
 template <typename T, typename U>
-void AssertEqualImpl(const T& t, const U& u, const std::string& t_str, const std::string& u_str, const std::string& file,
-                     const std::string& func, unsigned line, const std::string& hint);
+void AssertEqualImpl(const T& t, const U& u, const std::string_view t_str, const std::string_view u_str, const std::string_view file,
+                     const std::string_view func, unsigned line, const std::string_view hint);
 
 void AssertImpl(bool value, const std::string& expr_str, const std::string& file, const std::string& func, unsigned line,
                 const std::string& hint);
@@ -48,8 +48,8 @@ void TestSearchServer();
 
 //template function realization
 template <typename T, typename U>
-void AssertEqualImpl(const T& t, const U& u, const std::string& t_str, const std::string& u_str, const std::string& file,
-                     const std::string& func, unsigned line, const std::string& hint) {
+void AssertEqualImpl(const T& t, const U& u, const std::string_view t_str, const std::string_view u_str, const std::string_view file,
+                     const std::string_view func, unsigned line, const std::string_view hint) {
     if (t != u) {
         std::cerr << std::boolalpha;
         std::cerr << file << "("s << line << "): "s << func << ": "s;

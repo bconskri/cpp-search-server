@@ -7,7 +7,10 @@
 template <typename StringContainer>
 std::set<std::string> MakeUniqueNonEmptyStrings(const StringContainer& strings);
 
-std::vector<std::string> SplitIntoWords(const std::string& text);
+std::vector<std::string> SplitIntoWords(const std::string_view text);
+
+//функция разделяет переданную строку на слова но работает со string_view
+std::vector<std::string_view> SplitIntoWordsView(std::string_view str);
 
 //template function realize
 template <typename StringContainer>

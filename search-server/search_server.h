@@ -20,17 +20,24 @@ const double EPSILON = 1e-6;
 class SearchServer {
 public:
     SearchServer() = default;
-
+    /*
+     *  универсально создавать search-server, передавая в него при создании стоп-слова любыми
+     *  возможными контейнерами (вектор, сет, стринг, инициализер-лист)
+     */
     template <typename StringContainer>
     explicit SearchServer(const StringContainer& stop_words);
+    //конструктор из строки стоп слов. Оставлен так как передача строки в конструктор string_view
+    //приводит к вызову конструктора StringContainer не требующего преобразования, что неверно
     explicit SearchServer(const std::string& stop_words);
+    //конструктор string_view
+    explicit SearchServer(const std::string_view stop_words);
 
-    void AddDocument(int document_id, const std::string& document, DocumentStatus status, const std::vector<int>& ratings);
+    void AddDocument(int document_id, const std::string_view document, DocumentStatus status, const std::vector<int>& ratings);
 
     template <typename DocumentPredicate>
-    std::vector<Document> FindTopDocuments(const std::string& raw_query, DocumentPredicate document_predicate) const;
-    std::vector<Document> FindTopDocuments(const std::string& raw_query, DocumentStatus status) const;
-    std::vector<Document> FindTopDocuments(const std::string& raw_query) const;
+    std::vector<Document> FindTopDocuments(const std::string_view raw_query, DocumentPredicate document_predicate) const;
+    std::vector<Document> FindTopDocuments(const std::string_view raw_query, DocumentStatus status) const;
+    std::vector<Document> FindTopDocuments(const std::string_view raw_query) const;
 
     int GetDocumentCount() const;
 
@@ -40,15 +47,17 @@ public:
      * Если документ не соответствует запросу (нет пересечений по плюс-словам или есть минус-слово),
      * вектор слов нужно вернуть пустым
      */
-    std::tuple<std::vector<std::string>, DocumentStatus> MatchDocument(const std::string& raw_query, int document_id) const;
+    std::tuple<std::vector<std::string_view>, DocumentStatus> MatchDocument(const std::string_view raw_query,
+                                                                            int document_id) const;
+    std::tuple<std::vector<std::string_view>, DocumentStatus> MatchDocument(const std::execution::sequenced_policy&,
+                                                                            const std::string_view raw_query,
+                                                                            int document_id) const;
     /* Параллельные алгоритмы. Урок 9: Параллелим методы поисковой системы 2/3
      * Реализуйте многопоточную версию метода MatchDocument в дополнение к однопоточной.
      */
-    template <typename ExecutionPolicy>
-    std::tuple<std::vector<std::string>, DocumentStatus> MatchDocument(ExecutionPolicy policy,
-                                                                       const std::string& raw_query,
+    std::tuple<std::vector<std::string_view>, DocumentStatus> MatchDocument(const std::execution::parallel_policy&,
+                                                                       const std::string_view raw_query,
                                                                        int document_id) const;
-
     /* Спринт 5
      * Откажитесь от метода GetDocumentId(int index) и вместо него определите методы begin и end. Они вернут итераторы.
      * Итератор даст доступ к id всех документов, хранящихся в поисковом сервере. Вы можете не разрабатывать собственный
@@ -63,7 +72,7 @@ public:
      * Разработайте метод получения частот слов по id документа:
      * Если документа не существует, возвратите ссылку на пустой map.
      */
-    const std::map<std::string, double>& GetWordFrequencies(int document_id) const;
+    const std::map<std::string_view, double>& GetWordFrequencies(int document_id) const;
     /* Спринт 5
      * Разработайте метод удаления документов из поискового сервера
      */
@@ -81,75 +90,77 @@ private:
         int rating;
         DocumentStatus status;
     };
-    std::set<std::string> stop_words_;
-    std::map<std::string, std::map<int, double>> word_to_document_freqs_;
+    std::set<std::string> dictionary_;
+    std::set<std::string_view> stop_words_;
+    std::map<std::string_view, std::map<int, double>> word_to_document_freqs_;
     /* Спринт 5.
      * Добавлено для хранения частоты слов по документам
      */
-    std::map<int, std::map<std::string, double>> document_to_word_freqs_;
-
+    std::map<int, std::map<std::string_view, double>> document_to_word_freqs_;
+    //
     std::map<int, DocumentData> documents_;
     /* Спринт 5.
      * Vector refactor to set for ease erase
      */
     std::set<int> document_ids_;
 
-    bool IsStopWord(const std::string& word) const;
+    bool IsStopWord(const std::string_view word) const;
 
-    static bool IsValidWord(const std::string& word);
+    static bool IsValidWord(const std::string_view word);
 
-    const std::vector<std::string> SplitIntoWordsNoStop(const std::string& text) const;
+    const std::vector<std::string_view> SplitIntoWordsNoStop(const std::string_view text) const;
 
     static int ComputeAverageRating(const std::vector<int>& ratings);
 
     struct QueryWord {
-        std::string data;
+        std::string_view data;
         bool is_minus;
         bool is_stop;
     };
 
-    QueryWord ParseQueryWord(std::string text) const;
+    QueryWord ParseQueryWord(std::string_view text) const;
 
     struct Query {
-        std::vector<std::string> plus_words;
-        std::vector<std::string> minus_words;
+        std::vector<std::string_view> plus_words;
+        std::vector<std::string_view> minus_words;
     };
     /*
      * Разберем запрос на структуру пллюс слова и минус слова
      */
-    Query ParseQuery(const std::string& text) const;
+    Query ParseQuery(const std::string_view text) const;
     /* Версия для распараллеливания
      * Разберем запрос на структуру пллюс слова и минус слова
      */
-    template <typename ExecutionPolicy>
-    Query ParseQuery(ExecutionPolicy policy, const std::string& text) const;
+    Query ParseQuery(const std::execution::parallel_policy&, const std::string_view text) const;
 
-    double ComputeWordInverseDocumentFreq(const std::string& word) const;
+    double ComputeWordInverseDocumentFreq(const std::string_view word) const;
 
     template <typename DocumentPredicate>
     std::vector<Document> FindAllDocuments(const Query& query, DocumentPredicate filter_function) const;
 };
 
-//template function realization
+/*
+ *  универсально создавать search-server, передавая в него при создании стоп-слова любыми
+ *  возможными контейнерами (вектор, сет, стринг, инициализер-лист)
+ */
 template <typename StringContainer>
  SearchServer::SearchServer(const StringContainer& stop_words) {
     using namespace std::string_literals;
-    if (std::any_of(stop_words.cbegin(), stop_words.cend(), [](const std::string& word){return !SearchServer::IsValidWord(word);}))
+    if (std::any_of(stop_words.cbegin(), stop_words.cend(),
+                    [](const std::string_view word){return !SearchServer::IsValidWord(word);}))
     {
         throw std::invalid_argument("Недопустимые символы (с кодами от 0 до 31) в стоп словах"s);
     }
-    for (const std::string& word : stop_words) {
-        if (word != ""s) {
-            stop_words_.insert(word);
+    for (const std::string_view word : stop_words) {
+        if (!word.empty()) {
+            auto [it_word, yes] = dictionary_.emplace(word);
+            stop_words_.emplace(*it_word);
         }
     }
 }
 
 template <typename DocumentPredicate>
-std::vector<Document> SearchServer::FindTopDocuments(const std::string& raw_query, DocumentPredicate document_predicate) const {
-    //
-    //LOG_DURATION_STREAM("Operation time", std::cout);
-    //
+std::vector<Document> SearchServer::FindTopDocuments(const std::string_view raw_query, DocumentPredicate document_predicate) const {
     const SearchServer::Query query = SearchServer::ParseQuery(raw_query);
     auto matched_documents = SearchServer::FindAllDocuments(query, document_predicate);
 
@@ -172,10 +183,10 @@ std::vector<Document> SearchServer::FindAllDocuments(const SearchServer::Query& 
     std::map<int, double> document_to_relevance;
     //сделаем заглушку до распарралеливания
     //так как в параллельной версии тут дубли
-    std::set<std::string> plus_words_(query.plus_words.begin(), query.plus_words.end());
-    std::set<std::string> minus_words_(query.minus_words.begin(), query.minus_words.end());
+    std::set<std::string_view> plus_words_(query.plus_words.begin(), query.plus_words.end());
+    std::set<std::string_view> minus_words_(query.minus_words.begin(), query.minus_words.end());
     //
-    for (const std::string& word : plus_words_) {
+    for (const std::string_view word : plus_words_) {
         if (word_to_document_freqs_.count(word) == 0) {
             continue;
         }
@@ -188,7 +199,7 @@ std::vector<Document> SearchServer::FindAllDocuments(const SearchServer::Query& 
         }
     }
 
-    for (const std::string& word : minus_words_) {
+    for (const std::string_view word : minus_words_) {
         if (word_to_document_freqs_.count(word) == 0) {
             continue;
         }
@@ -229,71 +240,4 @@ void SearchServer::RemoveDocument(ExecutionPolicy policy, int document_id) {
                   [this, document_id](const auto& word){word_to_document_freqs_.at(*word).erase(document_id);});
 
     document_to_word_freqs_.erase(document_id); //Complexity: log(c.size()) + c.count(key)
-}
-
-/* Версия для распараллеливания
- * Перешли на вектора но в данной версии не работаем с уникальностью
- * Разберем запрос на структуру плюс слова и минус слова
- */
-template <typename ExecutionPolicy>
-SearchServer::Query SearchServer::ParseQuery([[maybe_unused]]ExecutionPolicy policy, const std::string& text) const {
-    // Empty result by initializing it with default constructed Query
-    SearchServer::Query result;
-    for (const std::string& word : SplitIntoWords(text)) {
-        const SearchServer::QueryWord query_word = SearchServer::ParseQueryWord(word);
-        if (!query_word.is_stop) {
-            if (query_word.is_minus) {
-                //контейнер вектор - но в данной версии не работаем с уникальностью
-                result.minus_words.push_back(query_word.data);
-            } else {
-                //контейнер вектор - но в данной версии не работаем с уникальностью
-                result.plus_words.push_back(query_word.data);
-            }
-        }
-    }
-    return result;
-}
-
-/* Параллельные алгоритмы. Урок 9: Параллелим методы поисковой системы 2/3
-* Реализуйте многопоточную версию метода MatchDocument в дополнение к однопоточной.
-*/
-template <typename ExecutionPolicy>
-std::tuple<std::vector<std::string>, DocumentStatus> SearchServer::MatchDocument([[maybe_unused]] ExecutionPolicy policy,
-                                                                   const std::string& raw_query,
-                                                                   int document_id) const {
-    if (std::is_same<std::execution::sequenced_policy, ExecutionPolicy>::value) {
-        //в таком случае вызываем однопотоковую версию без изменений
-        return SearchServer::MatchDocument(raw_query, document_id);
-
-    } else if (std::is_same<std::execution::parallel_policy, ExecutionPolicy>::value) {
-        //разберем запрос на структуру плюс и минус слов
-        const Query query = SearchServer::ParseQuery(std::execution::par, raw_query);
-        std::vector<std::string> matched_words;
-        //если хоть одно минус слово встречается в документе - возвращаем пустой матчинг
-        if (any_of(std::execution::par, query.minus_words.begin(), query.minus_words.end(),
-                    [this, document_id](const std::string& word) {
-                        return (word_to_document_freqs_.count(word) > 0 &&
-                                word_to_document_freqs_.at(word).count(document_id) > 0);
-                    })) {
-            return {matched_words, documents_.at(document_id).status};
-        }
-        //для каждого плюс слова если найдем документ, который его содержит
-        //то запомним плюс слово в таком случае
-        matched_words.resize(query.plus_words.size());
-        const auto& it = std::copy_if(std::execution::par,
-                     query.plus_words.begin(),query.plus_words.end(),
-                     matched_words.begin(),
-                     [this, document_id](const std::string& word) {
-                         return (word_to_document_freqs_.count(word) > 0 &&
-                                 word_to_document_freqs_.at(word).count(document_id) > 0);
-                     }
-        );
-        matched_words.erase(it, matched_words.end());
-        //
-        std::sort(std::execution::seq, matched_words.begin(), matched_words.end());
-        const auto& itr = std::unique(std::execution::seq, matched_words.begin(), matched_words.end());
-        matched_words.erase(itr, matched_words.end());
-        //
-        return {matched_words, documents_.at(document_id).status};
-    }
 }

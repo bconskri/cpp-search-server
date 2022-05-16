@@ -1,32 +1,36 @@
 #include "search_server.h"
 
 //public:
-SearchServer::SearchServer(const std::string& stop_words) : SearchServer::SearchServer(SplitIntoWords(stop_words)) {}
+SearchServer::SearchServer(const std::string& stop_words) : SearchServer::SearchServer(SplitIntoWordsView(stop_words)) {}
 
-void SearchServer::AddDocument(int document_id, const std::string& document, DocumentStatus status, const std::vector<int>& ratings) {
+SearchServer::SearchServer(const std::string_view stop_words) : SearchServer::SearchServer(SplitIntoWordsView(stop_words)) {}
+
+void SearchServer::AddDocument(int document_id, const std::string_view document,
+                               DocumentStatus status, const std::vector<int>& ratings) {
     if ((document_id < 0) || (documents_.count(document_id) > 0)) {
         throw std::invalid_argument("Отрицательный id или id ранее добавленного документа"s);
     }
-    const std::vector<std::string> words = SplitIntoWordsNoStop(document);
+    const std::vector<std::string_view> words = SplitIntoWordsNoStop(document);
     const double inv_word_count = 1.0 / words.size();
-    for (const std::string& word : words) {
-        word_to_document_freqs_[word][document_id] += inv_word_count;
+    for (const std::string_view word : words) {
+        auto [it_word, yes] = dictionary_.emplace(word);
+        word_to_document_freqs_[*it_word][document_id] += inv_word_count;
         /*
          * Спринт 5. Добавлено хранение частоты слов по документам
          */
-        document_to_word_freqs_[document_id][word] += inv_word_count;
+        document_to_word_freqs_[document_id][*it_word] += inv_word_count;
     }
     documents_.emplace(document_id, DocumentData{SearchServer::ComputeAverageRating(ratings), status});
     document_ids_.insert(document_id);
 }
 
-std::vector<Document> SearchServer::FindTopDocuments(const std::string& raw_query, DocumentStatus status) const {
+std::vector<Document> SearchServer::FindTopDocuments(const std::string_view raw_query, DocumentStatus status) const {
     return SearchServer::FindTopDocuments(raw_query, [status]([[maybe_unused]] int document_id,
-            DocumentStatus lstatus, [[maybe_unused]] int rating){
+                                                              DocumentStatus lstatus, [[maybe_unused]] int rating){
         return lstatus == status;});
 }
 
-std::vector<Document> SearchServer::FindTopDocuments(const std::string& raw_query) const {
+std::vector<Document> SearchServer::FindTopDocuments(const std::string_view raw_query) const {
     return SearchServer::FindTopDocuments(raw_query, DocumentStatus::ACTUAL);
 }
 
@@ -40,28 +44,29 @@ int SearchServer::GetDocumentCount() const {
  * Если документ не соответствует запросу (нет пересечений по плюс-словам или есть минус-слово),
  * вектор слов нужно вернуть пустым
  */
-std::tuple<std::vector<std::string>, DocumentStatus> SearchServer::MatchDocument(const std::string& raw_query, int document_id) const {
+std::tuple<std::vector<std::string_view>, DocumentStatus> SearchServer::MatchDocument(const std::string_view raw_query,
+                                                                                      int document_id) const {
+    return SearchServer::MatchDocument(std::execution::seq, raw_query, document_id);
+}
+
+std::tuple<std::vector<std::string_view>, DocumentStatus> SearchServer::MatchDocument(const std::execution::sequenced_policy&,
+                                                                        const std::string_view raw_query, int document_id) const {
     //разберем запрос на структуру плюс и минус слов
     const Query query = SearchServer::ParseQuery(raw_query);
-    std::vector<std::string> matched_words;
-    //для каждого плюс слова найдем документ, который его содержит
-    //и запомним плюс слово в таком случае
-    for (const std::string& word : query.plus_words) {
-        if (word_to_document_freqs_.count(word) == 0) {
-            continue;
-        }
-        if (word_to_document_freqs_.at(word).count(document_id)) {
-            matched_words.push_back(word);
+    std::vector<std::string_view> matched_words;
+    //если документ содержит минус слово, то документ нам не подходит
+    for (const std::string_view word : query.minus_words) {
+        if (word_to_document_freqs_.count(word) != 0 &&
+            word_to_document_freqs_.at(word).count(document_id)) {
+            return {matched_words, documents_.at(document_id).status};
         }
     }
-    //если документ содержит минус слово, то документ нам не подходит
-    for (const std::string& word : query.minus_words) {
-        if (word_to_document_freqs_.count(word) == 0) {
-            continue;
-        }
-        if (word_to_document_freqs_.at(word).count(document_id)) {
-            matched_words.clear();
-            break;
+    //для каждого плюс слова найдем документ, который его содержит
+    //и запомним плюс слово в таком случае
+    for (const std::string_view word : query.plus_words) {
+        if (word_to_document_freqs_.count(word) != 0 &&
+            word_to_document_freqs_.at(word).count(document_id)) {
+            matched_words.push_back(word);
         }
     }
     return {matched_words, documents_.at(document_id).status};
@@ -83,8 +88,8 @@ std::set<int>::const_iterator SearchServer::cend() const {
     return document_ids_.cend();
 }
 
-const std::map<std::string, double> &SearchServer::GetWordFrequencies(int document_id) const {
-    static const std::map<std::string, double> empty_map;
+const std::map<std::string_view, double> &SearchServer::GetWordFrequencies(int document_id) const {
+    static const std::map<std::string_view, double> empty_map;
     auto it = document_to_word_freqs_.find(document_id); //Complexity: Log in the size of the container.
     if (it != document_to_word_freqs_.end()) {
         return it -> second;
@@ -107,20 +112,20 @@ void SearchServer::RemoveDocument(int document_id) {
 
 //private:
 
-bool SearchServer::IsStopWord(const std::string& word) const {
-    return stop_words_.count(word) > 0;
+bool SearchServer::IsStopWord(const std::string_view word) const {
+    return stop_words_.count(std::string{word}) > 0;
 }
 
-bool SearchServer::IsValidWord(const std::string& word) {
+bool SearchServer::IsValidWord(const std::string_view word) {
     // A valid word must not contain special characters
-    return none_of(word.begin(), word.end(), [](char c) {
+    return std::none_of(word.begin(), word.end(), [](char c) {
         return c >= '\0' && c < ' ';
     });
 }
 
-const std::vector<std::string> SearchServer::SplitIntoWordsNoStop(const std::string& text) const {
-    std::vector<std::string> words;
-    for (const std::string& word : SplitIntoWords(text)) {
+const std::vector<std::string_view> SearchServer::SplitIntoWordsNoStop(const std::string_view text) const {
+    std::vector<std::string_view> words;
+    for (const std::string_view word : SplitIntoWordsView(text)) {
         if (!IsValidWord(word)) {
             throw std::invalid_argument("Недопустимые символы (с кодами от 0 до 31) в тексте добавляемого документа"s);
         }
@@ -145,7 +150,7 @@ int SearchServer::ComputeAverageRating(const std::vector<int>& ratings) {
     return rating_sum / static_cast<int>(ratings.size());
 }
 
-SearchServer::QueryWord SearchServer::ParseQueryWord(std::string text) const {
+SearchServer::QueryWord SearchServer::ParseQueryWord(std::string_view text) const {
     // Empty result by initializing it with default constructed QueryWord
     if (text.empty()) {
         throw std::invalid_argument("ParseQueryWord: Текст запроса некорректен"s);
@@ -165,9 +170,9 @@ SearchServer::QueryWord SearchServer::ParseQueryWord(std::string text) const {
 /*
  * Разберем запрос на структуру пллюс слова и минус слова
  */
-SearchServer::Query SearchServer::ParseQuery(const std::string& text) const {
+SearchServer::Query SearchServer::ParseQuery(const std::string_view text) const {
     SearchServer::Query query;
-    for (const std::string& word : SplitIntoWords(text)) {
+    for (const std::string_view word : SplitIntoWordsView(text)) {
         const SearchServer::QueryWord query_word = SearchServer::ParseQueryWord(word);
         if (!query_word.is_stop) {
             if (query_word.is_minus) {
@@ -178,17 +183,78 @@ SearchServer::Query SearchServer::ParseQuery(const std::string& text) const {
         }
     }
     //так как контейнер вектор - нужно следить за уникальностью значений
-    std::sort(query.minus_words.begin(), query.minus_words.end());
-    auto itm = std::unique(query.minus_words.begin(), query.minus_words.end());
-    query.minus_words.resize(std::distance(query.minus_words.begin(), itm));
+    if  ((query.minus_words.end() - query.minus_words.begin()) > 0) {
+        std::sort(query.minus_words.begin(), query.minus_words.end());
+        auto itm = std::unique(query.minus_words.begin(), query.minus_words.end());
+        query.minus_words.resize(std::distance(query.minus_words.begin(), itm));
+    }
     //так как контейнер вектор - нужно следить за уникальностью значений
-    std::sort(query.plus_words.begin(), query.plus_words.end());
-    auto itp = std::unique(query.plus_words.begin(), query.plus_words.end());
-    query.plus_words.resize(std::distance(query.plus_words.begin(), itp));
+    if  ((query.plus_words.end() - query.plus_words.begin()) > 0) {
+        std::sort(query.plus_words.begin(), query.plus_words.end());
+        auto itp = std::unique(query.plus_words.begin(), query.plus_words.end());
+        query.plus_words.resize(std::distance(query.plus_words.begin(), itp));
+    }
     //
     return query;
 }
 
-double SearchServer::ComputeWordInverseDocumentFreq(const std::string& word) const {
+/* Версия параллельной обработки
+ * Перешли на вектора но в данной версии не работаем с уникальностью
+ * Разберем запрос на структуру плюс слова и минус слова
+ */
+SearchServer::Query SearchServer::ParseQuery(const std::execution::parallel_policy&, const std::string_view text) const {
+    SearchServer::Query result;
+    for (const std::string_view word : SplitIntoWordsView(text)) {
+        const SearchServer::QueryWord query_word = SearchServer::ParseQueryWord(word);
+        if (!query_word.is_stop) {
+            if (query_word.is_minus) {
+                //контейнер вектор - но в данной версии не работаем с уникальностью
+                result.minus_words.push_back(query_word.data);
+            } else {
+                //контейнер вектор - но в данной версии не работаем с уникальностью
+                result.plus_words.push_back(query_word.data);
+            }
+        }
+    }
+    return result;
+}
+
+double SearchServer::ComputeWordInverseDocumentFreq(const std::string_view word) const {
     return std::log(SearchServer::GetDocumentCount() * 1.0 / word_to_document_freqs_.at(word).size());
+}
+
+/* Параллельные алгоритмы. Урок 9: Параллелим методы поисковой системы 2/3
+* Реализуйте многопоточную версию метода MatchDocument в дополнение к однопоточной.
+*/
+std::tuple<std::vector<std::string_view>, DocumentStatus> SearchServer::MatchDocument(const std::execution::parallel_policy&,
+                                                                                      const std::string_view raw_query,
+                                                                                      int document_id) const {
+    const Query query = SearchServer::ParseQuery(std::execution::par, raw_query);
+    std::vector<std::string_view> matched_words;
+    //если хоть одно минус слово встречается в документе - возвращаем пустой матчинг
+    if (any_of(std::execution::par, query.minus_words.begin(), query.minus_words.end(),
+               [this, document_id](std::string_view word) {
+                   return (word_to_document_freqs_.count(word) > 0 &&
+                           word_to_document_freqs_.at(word).count(document_id) > 0);
+               })) {
+        return {matched_words, documents_.at(document_id).status};
+    }
+    //для каждого плюс слова если найдем документ, который его содержит
+    //то запомним плюс слово в таком случае
+    matched_words.resize(query.plus_words.size());
+    auto it = std::copy_if(std::execution::par,
+                           query.plus_words.begin(),
+                           query.plus_words.end(),
+                           matched_words.begin(),
+                           [this, document_id](const std::string_view word) {
+                               return (word_to_document_freqs_.count(word) > 0 &&
+                                       word_to_document_freqs_.at(word).count(document_id) > 0);
+                           }
+    );
+    //
+    std::sort(std::execution::par, matched_words.begin(), it);
+    it = std::unique(std::execution::par, matched_words.begin(), it);
+    matched_words.erase(it, matched_words.end());
+
+    return {matched_words, documents_.at(document_id).status};
 }
