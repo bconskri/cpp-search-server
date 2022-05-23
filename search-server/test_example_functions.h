@@ -3,11 +3,6 @@
 //
 #pragma once
 
-#ifndef CPP_SEARCH_SERVER_TEST_EXAMPLE_FUNCTIONS_H
-#define CPP_SEARCH_SERVER_TEST_EXAMPLE_FUNCTIONS_H
-
-#endif //CPP_SEARCH_SERVER_TEST_EXAMPLE_FUNCTIONS_H
-
 #include <vector>
 #include <string>
 #include "document.h"
