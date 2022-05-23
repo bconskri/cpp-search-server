@@ -170,6 +170,7 @@ mt19937 generator;
 } 
 
 Подсказка
+
 Начните с обучения всех версий методов FindTopDocuments 
 и FindAllDocuments приёму аргументов execution::seq и execution::par.
 Попрофилируйте и определите, где узкое место: в сортировке документов или в 
