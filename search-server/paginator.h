@@ -37,7 +37,7 @@ public:
         return _pages.end();
     }
 
-    int size() const {
+    [[nodiscard]] int size() const {
         return _pages.size();
     }
 private:
@@ -48,7 +48,7 @@ private:
 };
 
 template <typename Container>
-auto Paginate(const Container& c, std::size_t page_size) {
+[[maybe_unused]] auto Paginate(const Container& c, std::size_t page_size) {
     return Paginator(begin(c), end(c), page_size);
 }
 

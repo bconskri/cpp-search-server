@@ -15,4 +15,4 @@
  * Функция RemoveDuplicates должна для каждого удаляемого документа вывести в cout сообщение в формате
  * Found duplicate document id N, где вместо N следует подставить id удаляемого документа.
 */
-void RemoveDuplicates(SearchServer& search_server);
+[[maybe_unused]] void RemoveDuplicates(SearchServer& search_server);

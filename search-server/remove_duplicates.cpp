@@ -4,7 +4,7 @@
 #include "remove_duplicates.h"
 
 //out of class procedure
-void RemoveDuplicates(SearchServer& search_server) {
+[[maybe_unused]] void RemoveDuplicates(SearchServer& search_server) {
     std::set<std::set<std::string_view>> words_of_docs_processed;
     std::set<int> doc_duplicated_ids;
 

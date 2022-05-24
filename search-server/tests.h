@@ -16,8 +16,8 @@ using namespace std::string_literals;
 
 // -------- Начало модульных тестов поисковой системы ----------
 template <typename T, typename U>
-void AssertEqualImpl(const T& t, const U& u, const std::string_view t_str, const std::string_view u_str, const std::string_view file,
-                     const std::string_view func, unsigned line, const std::string_view hint);
+void AssertEqualImpl(const T& t, const U& u, std::string_view t_str, std::string_view u_str, std::string_view file,
+                     std::string_view func, unsigned line, std::string_view hint);
 
 void AssertImpl(bool value, const std::string& expr_str, const std::string& file, const std::string& func, unsigned line,
                 const std::string& hint);
@@ -44,7 +44,7 @@ void RunTestImpl(T& func, const std::string& name);
 #define RUN_TEST(func) RunTestImpl((func), #func)
 
 // Функция TestSearchServer является точкой входа для запуска тестов
-void TestSearchServer();
+[[maybe_unused]] void TestSearchServer();
 
 //template function realization
 template <typename T, typename U>

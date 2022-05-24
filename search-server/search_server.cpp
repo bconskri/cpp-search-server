@@ -138,11 +138,6 @@ int SearchServer::ComputeAverageRating(const std::vector<int>& ratings) {
     if (ratings.empty()) {
         return 0;
     }
-    //edited - review recommendation
-//    int rating_sum = 0;
-//    for (const int rating : ratings) {
-//        rating_sum += rating;
-//    }
     int rating_sum = std::accumulate(ratings.begin(), ratings.end(), 0);
 
     return rating_sum / static_cast<int>(ratings.size());
@@ -158,7 +153,7 @@ SearchServer::QueryWord SearchServer::ParseQueryWord(std::string_view text) cons
         is_minus = true;
         text = text.substr(1);
     }
-    if (text.empty() || text[0] == '-' || !SearchServer::IsValidWord(text)) {
+    if (text.empty() || text[0] == '-' || !IsValidWord(text)) {
         throw std::invalid_argument("ParseQueryWord: Текст запроса некорректен"s);
     }
 
@@ -171,7 +166,7 @@ SearchServer::QueryWord SearchServer::ParseQueryWord(std::string_view text) cons
 SearchServer::Query SearchServer::ParseQuery(const std::string_view text) const {
     SearchServer::Query query;
     for (const std::string_view word : SplitIntoWordsView(text)) {
-        const SearchServer::QueryWord query_word = SearchServer::ParseQueryWord(word);
+        const QueryWord query_word = ParseQueryWord(word);
         if (!query_word.is_stop) {
             if (query_word.is_minus) {
                 query.minus_words.push_back(query_word.data);
@@ -203,7 +198,7 @@ SearchServer::Query SearchServer::ParseQuery(const std::string_view text) const 
 SearchServer::Query SearchServer::ParseQuery(const std::execution::parallel_policy&, const std::string_view text) const {
     SearchServer::Query result;
     for (const std::string_view word : SplitIntoWordsView(text)) {
-        const SearchServer::QueryWord query_word = SearchServer::ParseQueryWord(word);
+        const QueryWord query_word = ParseQueryWord(word);
         if (!query_word.is_stop) {
             if (query_word.is_minus) {
                 //контейнер вектор - но в данной версии не работаем с уникальностью
@@ -218,16 +213,16 @@ SearchServer::Query SearchServer::ParseQuery(const std::execution::parallel_poli
 }
 
 double SearchServer::ComputeWordInverseDocumentFreq(const std::string_view word) const {
-    return std::log(SearchServer::GetDocumentCount() * 1.0 / word_to_document_freqs_.at(word).size());
+    return std::log(GetDocumentCount() * 1.0 / word_to_document_freqs_.at(word).size());
 }
 
 /* Параллельные алгоритмы. Урок 9: Параллелим методы поисковой системы 2/3
 * Реализуйте многопоточную версию метода MatchDocument в дополнение к однопоточной.
 */
-std::tuple<std::vector<std::string_view>, DocumentStatus> SearchServer::MatchDocument(const std::execution::parallel_policy&,
+[[maybe_unused]] std::tuple<std::vector<std::string_view>, DocumentStatus> SearchServer::MatchDocument(const std::execution::parallel_policy&,
                                                                                       const std::string_view raw_query,
                                                                                       int document_id) const {
-    const Query query = SearchServer::ParseQuery(std::execution::par, raw_query);
+    const Query query = ParseQuery(std::execution::par, raw_query);
     std::vector<std::string_view> matched_words;
     //если хоть одно минус слово встречается в документе - возвращаем пустой матчинг
     if (any_of(std::execution::par, query.minus_words.begin(), query.minus_words.end(),

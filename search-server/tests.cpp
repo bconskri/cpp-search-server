@@ -51,7 +51,7 @@ void TestAddedDocumentMustBeFind() {
     {
         SearchServer server;
         const auto found_docs = server.FindTopDocuments("in the city"s);
-        ASSERT(!found_docs.size());
+        ASSERT(found_docs.empty());
     }
     //затем убеждаемся что документ добавлен и найдет по словам
     {
@@ -77,7 +77,7 @@ void TestMinusWordDocumentsExclude() {
         SearchServer server;
         server.AddDocument(doc_id, content, DocumentStatus::ACTUAL, ratings);
         const auto found_docs = server.FindTopDocuments("city -cat"s);
-        ASSERT_HINT(!found_docs.size(), "Documents with minus words must be exclude from search request"s);
+        ASSERT_HINT(found_docs.empty(), "Documents with minus words must be exclude from search request"s);
     }
 }
 
@@ -101,7 +101,7 @@ void TestDocumentsMatching() {
         SearchServer server;
         server.AddDocument(doc_id, content, DocumentStatus::ACTUAL, ratings);
         const auto [found_docs_word, status] = server.MatchDocument("city -the"s, doc_id);
-        ASSERT_HINT(!found_docs_word.size(), "If minus words match - list of words must be empty"s);
+        ASSERT_HINT(found_docs_word.empty(), "If minus words match - list of words must be empty"s);
     }
 }
 
@@ -268,7 +268,7 @@ void TestRelevanceCalc() {
 }
 
 // Функция TestSearchServer является точкой входа для запуска тестов
-void TestSearchServer() {
+[[maybe_unused]] void TestSearchServer() {
     RUN_TEST(TestAddedDocumentMustBeFind);
     RUN_TEST(TestExcludeStopWordsFromAddedDocumentContent);
     RUN_TEST(TestMinusWordDocumentsExclude);

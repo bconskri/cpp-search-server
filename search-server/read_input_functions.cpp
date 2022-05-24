@@ -6,7 +6,7 @@ std::string ReadLine() {
     return s;
 }
 
-int ReadLineWithNumber() {
+[[maybe_unused]] int ReadLineWithNumber() {
     int result;
     std::cin >> result;
     ReadLine();

@@ -33,7 +33,7 @@ private:
     void PutRequestIntoQueue(const std::string &raw_query, const std::vector<Document> &result);
 };
 
-//tempate function realization
+//template function realization
 template<typename DocumentPredicate>
 std::vector<Document> RequestQueue::AddFindRequest(const std::string &raw_query, DocumentPredicate document_predicate) {
     // напишите реализацию

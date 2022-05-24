@@ -9,7 +9,8 @@
 using namespace std::string_literals;
 
 std::string ReadLine();
-int ReadLineWithNumber();
+
+[[maybe_unused]] int ReadLineWithNumber();
 
 template <typename Element>
 std::ostream& operator<<(std::ostream& out, const std::vector<Element>& container) {

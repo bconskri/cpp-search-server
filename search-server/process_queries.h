@@ -9,7 +9,7 @@
 #include "search_server.h"
 
 /*
- *  функция ProcessQueries, распараллеливающую обработку нескольких запросов к поисковой системе.
+ *  Функция ProcessQueries, распараллеливающую обработку нескольких запросов к поисковой системе.
  *  Она принимает N запросов и возвращает вектор длины N, i-й элемент которого —
  *  результат вызова FindTopDocuments для i-го запроса.
  */
@@ -27,6 +27,6 @@ std::vector<std::vector<Document>> ProcessQueries(
  * затем для второго и так далее. Количество итераций такого цикла должно быть равно суммарному
  * размеру внутренних векторов, возвращаемых функцией ProcessQueries.
  */
-std::list<Document> ProcessQueriesJoined(
+[[maybe_unused]] std::list<Document> ProcessQueriesJoined(
         const SearchServer& search_server,
         const std::vector<std::string>& queries);
