@@ -19,6 +19,8 @@
 const int MAX_RESULT_DOCUMENT_COUNT = 5;
 const double EPSILON = 1e-6;
 
+using Doc_Status_type = std::tuple<std::vector<std::string_view>, DocumentStatus>;
+
 class SearchServer {
 public:
     SearchServer() = default;
@@ -59,15 +61,15 @@ public:
      * Если документ не соответствует запросу (нет пересечений по плюс-словам или есть минус-слово),
      * вектор слов нужно вернуть пустым
      */
-    [[nodiscard]] std::tuple<std::vector<std::string_view>, DocumentStatus> MatchDocument(std::string_view raw_query,
+    [[nodiscard]] Doc_Status_type MatchDocument(std::string_view raw_query,
                                                                             int document_id) const;
-    [[nodiscard]] std::tuple<std::vector<std::string_view>, DocumentStatus> MatchDocument(const std::execution::sequenced_policy&,
+    [[nodiscard]] Doc_Status_type MatchDocument(const std::execution::sequenced_policy&,
                                                                             std::string_view raw_query,
                                                                             int document_id) const;
     /* Параллельные алгоритмы. Урок 9: Параллелим методы поисковой системы 2/3
      * Реализуйте многопоточную версию метода MatchDocument в дополнение к однопоточной.
      */
-    [[maybe_unused]] [[nodiscard]] std::tuple<std::vector<std::string_view>, DocumentStatus> MatchDocument(const std::execution::parallel_policy&,
+    [[maybe_unused]] [[nodiscard]] Doc_Status_type MatchDocument(const std::execution::parallel_policy&,
                                                                        std::string_view raw_query,
                                                                        int document_id) const;
     /* Спринт 5
@@ -88,14 +90,13 @@ public:
     /* Спринт 5
      * Разработайте метод удаления документов из поискового сервера
      */
-    void RemoveDocument(int document_id);
-
     /* Параллельные алгоритмы. Урок 9: Параллелим методы поисковой системы 1/3
      * Реализуйте многопоточную версию метода RemoveDocument в дополнение к однопоточной.
      * Как и прежде, в метод RemoveDocument может быть передан любой document_id
      */
     template <typename ExecutionPolicy>
-    [[maybe_unused]] [[maybe_unused]] void RemoveDocument(ExecutionPolicy policy, int document_id);
+    void RemoveDocument(const ExecutionPolicy& policy, int document_id);
+    void RemoveDocument(int document_id);
 
 private:
     struct DocumentData {
@@ -139,11 +140,8 @@ private:
     /*
      * Разберем запрос на структуру пллюс слова и минус слова
      */
-    [[nodiscard]] Query ParseQuery(std::string_view text) const;
-    /* Версия для распараллеливания
-     * Разберем запрос на структуру пллюс слова и минус слова
-     */
-    [[nodiscard]] Query ParseQuery(const std::execution::parallel_policy&, std::string_view text) const;
+    template <typename ExecutionPolicy>
+    [[nodiscard]] Query ParseQuery(std::string_view text, const ExecutionPolicy& exec_policy) const;
 
     [[nodiscard]] double ComputeWordInverseDocumentFreq(std::string_view word) const;
 
@@ -181,7 +179,7 @@ template <typename ExecutionPolicy, typename DocumentPredicate>
 std::vector<Document> SearchServer::FindTopDocuments(const ExecutionPolicy& exec_policy,
                                        const std::string_view raw_query,
                                        DocumentPredicate document_predicate) const {
-    const SearchServer::Query query = SearchServer::ParseQuery(raw_query); //FIXME may be parallel will be better
+    const SearchServer::Query query = SearchServer::ParseQuery(raw_query, std::execution::seq);
     auto matched_documents = SearchServer::FindAllDocuments(exec_policy, query, document_predicate);
 
     std::sort(exec_policy, matched_documents.begin(), matched_documents.end(),
@@ -260,20 +258,57 @@ std::vector<Document> SearchServer::FindAllDocuments(const ExecutionPolicy& exec
 * Как и прежде, в метод RemoveDocument может быть передан любой document_id
 */
 template <typename ExecutionPolicy>
-[[maybe_unused]] void SearchServer::RemoveDocument(ExecutionPolicy policy, int document_id) {
+void SearchServer::RemoveDocument(const ExecutionPolicy& policy, int document_id) {
     if (!documents_.count(document_id)) {return;}
 
     documents_.erase(document_id); //Complexity: log(c.size()) + c.count(key)
     document_ids_.erase(document_id); //Complexity: log(c.size()) + c.count(key)
 
     const auto& words_of_doc = document_to_word_freqs_.at(document_id);
-    std::vector<const std::string*> words_to_erase(words_of_doc.size());
+    std::vector<std::string_view> words_to_erase(words_of_doc.size());
     std::transform(policy, words_of_doc.begin(), words_of_doc.end(),
                    words_to_erase.begin(),
-                   [](const auto& words_freq){ return &words_freq.first;});
+                   [](const auto& words_freq){ return words_freq.first;});
 
     std::for_each(policy, words_to_erase.begin(), words_to_erase.end(),
-                  [this, document_id](const auto& word){word_to_document_freqs_.at(*word).erase(document_id);});
+                  [this, document_id](const auto& word){word_to_document_freqs_.at(word).erase(document_id);});
 
     document_to_word_freqs_.erase(document_id); //Complexity: log(c.size()) + c.count(key)
+}
+
+/* Версия параллельной обработки
+ * Перешли на вектора но в данной версии не работаем с уникальностью
+ * Разберем запрос на структуру плюс слова и минус слова
+ */
+template <typename ExecutionPolicy>
+SearchServer::Query SearchServer::ParseQuery(std::string_view text, [[maybe_unused]] const ExecutionPolicy& exec_policy) const {
+    SearchServer::Query query;
+    for (std::string_view word : SplitIntoWordsView(text)) {
+        const QueryWord query_word = ParseQueryWord(word);
+        if (!query_word.is_stop) {
+            if (query_word.is_minus) {
+                //контейнер вектор - но в данной версии не работаем с уникальностью
+                query.minus_words.push_back(query_word.data);
+            } else {
+                //контейнер вектор - но в данной версии не работаем с уникальностью
+                query.plus_words.push_back(query_word.data);
+            }
+        }
+    }
+    //для непараллельной версии нужно удалить дубли, так как дальше они не обрабатываются
+    if constexpr(std::is_same_v<std::execution::sequenced_policy, ExecutionPolicy>) {
+        //так как контейнер вектор - нужно следить за уникальностью значений
+        if  ((query.minus_words.end() - query.minus_words.begin()) > 0) {
+            std::sort(query.minus_words.begin(), query.minus_words.end());
+            auto itm = std::unique(query.minus_words.begin(), query.minus_words.end());
+            query.minus_words.resize(std::distance(query.minus_words.begin(), itm));
+        }
+        //так как контейнер вектор - нужно следить за уникальностью значений
+        if  ((query.plus_words.end() - query.plus_words.begin()) > 0) {
+            std::sort(query.plus_words.begin(), query.plus_words.end());
+            auto itp = std::unique(query.plus_words.begin(), query.plus_words.end());
+            query.plus_words.resize(std::distance(query.plus_words.begin(), itp));
+        }
+    }
+    return query;
 }
