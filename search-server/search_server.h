@@ -19,7 +19,7 @@
 const int MAX_RESULT_DOCUMENT_COUNT = 5;
 const double EPSILON = 1e-6;
 
-using Doc_Status_type = std::tuple<std::vector<std::string_view>, DocumentStatus>;
+using DocStatusType = std::tuple<std::vector<std::string_view>, DocumentStatus>;
 
 class SearchServer {
 public:
@@ -61,17 +61,17 @@ public:
      * Если документ не соответствует запросу (нет пересечений по плюс-словам или есть минус-слово),
      * вектор слов нужно вернуть пустым
      */
-    [[nodiscard]] Doc_Status_type MatchDocument(std::string_view raw_query,
-                                                                            int document_id) const;
-    [[nodiscard]] Doc_Status_type MatchDocument(const std::execution::sequenced_policy&,
-                                                                            std::string_view raw_query,
-                                                                            int document_id) const;
+    [[nodiscard]] DocStatusType MatchDocument(std::string_view raw_query,
+                                              int document_id) const;
+    [[nodiscard]] DocStatusType MatchDocument(const std::execution::sequenced_policy&,
+                                              std::string_view raw_query,
+                                              int document_id) const;
     /* Параллельные алгоритмы. Урок 9: Параллелим методы поисковой системы 2/3
      * Реализуйте многопоточную версию метода MatchDocument в дополнение к однопоточной.
      */
-    [[maybe_unused]] [[nodiscard]] Doc_Status_type MatchDocument(const std::execution::parallel_policy&,
-                                                                       std::string_view raw_query,
-                                                                       int document_id) const;
+    [[maybe_unused]] [[nodiscard]] DocStatusType MatchDocument(const std::execution::parallel_policy&,
+                                                               std::string_view raw_query,
+                                                               int document_id) const;
     /* Спринт 5
      * Откажитесь от метода GetDocumentId(int index) и вместо него определите методы begin и end. Они вернут итераторы.
      * Итератор даст доступ к id всех документов, хранящихся в поисковом сервере. Вы можете не разрабатывать собственный

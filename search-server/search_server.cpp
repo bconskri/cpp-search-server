@@ -5,6 +5,11 @@ SearchServer::SearchServer(const std::string& stop_words) : SearchServer::Search
 
 SearchServer::SearchServer(std::string_view stop_words) : SearchServer::SearchServer(SplitIntoWordsView(stop_words)) {}
 
+/* Внутри функции AddDocument - добавление документа в базу:
+    документ будет разбит на слова;
+    стоп-слова будут исключены из рассмотрения;
+    оставшиеся слова будут добавлены в базу данных
+ */
 void SearchServer::AddDocument(int document_id, std::string_view document,
                                DocumentStatus status, const std::vector<int>& ratings) {
     if ((document_id < 0) || (documents_.count(document_id) > 0)) {
@@ -24,6 +29,8 @@ void SearchServer::AddDocument(int document_id, std::string_view document,
     document_ids_.insert(document_id);
 }
 
+/*Поиск документов по запросу, с учетом статуса
+ */
 std::vector<Document> SearchServer::FindTopDocuments(std::string_view raw_query, DocumentStatus status) const {
     return SearchServer::FindTopDocuments(std::execution::seq, raw_query, status);
 }
@@ -42,14 +49,14 @@ int SearchServer::GetDocumentCount() const {
  * Если документ не соответствует запросу (нет пересечений по плюс-словам или есть минус-слово),
  * вектор слов нужно вернуть пустым
  */
-Doc_Status_type SearchServer::MatchDocument(std::string_view raw_query,
-                                                                                      int document_id) const {
+DocStatusType SearchServer::MatchDocument(std::string_view raw_query,
+                                          int document_id) const {
     return SearchServer::MatchDocument(std::execution::seq, raw_query, document_id);
 }
 
-Doc_Status_type SearchServer::MatchDocument(const std::execution::sequenced_policy&,
-                                                                                      std::string_view raw_query,
-                                                                                      int document_id) const {
+DocStatusType SearchServer::MatchDocument(const std::execution::sequenced_policy&,
+                                          std::string_view raw_query,
+                                          int document_id) const {
     //разберем запрос на структуру плюс и минус слов
     const Query query = SearchServer::ParseQuery(raw_query, std::execution::seq);
     std::vector<std::string_view> matched_words;
@@ -96,6 +103,10 @@ const std::map<std::string_view, double> &SearchServer::GetWordFrequencies(int d
     return empty_map;
 }
 
+/**
+ * Delete doc by doc_id
+ * @param document_id - id of doc to delete
+ */
 void SearchServer::RemoveDocument(int document_id) {
     RemoveDocument(std::execution::seq, document_id);
 }
@@ -159,9 +170,9 @@ double SearchServer::ComputeWordInverseDocumentFreq(std::string_view word) const
 /* Параллельные алгоритмы. Урок 9: Параллелим методы поисковой системы 2/3
 * Реализуйте многопоточную версию метода MatchDocument в дополнение к однопоточной.
 */
-[[maybe_unused]] Doc_Status_type SearchServer::MatchDocument(const std::execution::parallel_policy&,
-                                                                                                       std::string_view raw_query,
-                                                                                                       int document_id) const {
+[[maybe_unused]] DocStatusType SearchServer::MatchDocument(const std::execution::parallel_policy&,
+                                                           std::string_view raw_query,
+                                                           int document_id) const {
     const Query query = ParseQuery(raw_query, std::execution::par);
     std::vector<std::string_view> matched_words;
     //если хоть одно минус слово встречается в документе - возвращаем пустой матчинг
