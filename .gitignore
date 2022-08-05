@@ -34,3 +34,4 @@
 /CMakeLists.txt
 /search-server/Archive/
 /search-server/Experimental/
+/cmake-build-debug-coverage/
